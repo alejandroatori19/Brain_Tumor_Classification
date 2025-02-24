@@ -1,4 +1,9 @@
+# Everything inside those folders
 data/
 models/
 
+# Files with extension .pth
 *.pth
+
+# Results files
+*.csv
