@@ -1,0 +1,2 @@
+Epoch,Train Loss,Test Loss,Train Accuracy,Test Accuracy,Correct Predictions (Train),Incorrect Predictions (Train),Correct Predictions (Test),Incorrect Predictions (Test),Time (Train),Time (Test)
+1,1.0,1.0,100.0,100.0,100.0,-99.0,100.0,-99.0,20.0816,20.0781

@@ -1,3 +1,4 @@
+# Libraries related with the neural net
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -8,12 +9,12 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torch import save
 
-
-
+# Utils libraries
 from PIL import Image
 import os
 import pandas as pd
 import time
+import numpy as np
 
 # Neural net modifiers
 epochs = 5
@@ -31,6 +32,8 @@ transform = transforms.Compose([
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 DECIMALS = 5
 
+# ----------------------------------
+
 # Class that manage the neural net
 class ResNet18Classifier(nn.Module):
     def __init__(self, num_classes=4):
@@ -41,6 +44,8 @@ class ResNet18Classifier(nn.Module):
 
     def forward(self, x):
         return self.model(x)
+
+# --------------------------------
 
 # Class that handles the dataset
 class BrainTumorDataset (Dataset):
@@ -77,9 +82,31 @@ class BrainTumorDataset (Dataset):
             
         return image, label 
 
-# ----------------------------------------------
+# --------------
 
-def train_model (model, train_data, optim, loss):
+class EarlyStop:
+    patience = None
+    
+    threshold_loss = None
+    verbose = None
+    best_loss = None
+    counter = None
+    stop_training = None
+    
+
+    def __init__(self, patience=2, threshold_loss=0.001, verbose=False):
+        self.patience = patience
+        self.threshold_loss = threshold_loss        
+        self.verbose = verbose
+        
+        self.best_loss = np.inf
+        self.counter = 0
+        self.stop_training = False
+        
+
+# -----------------------------------------------
+
+def train_model (model, train_data, optimizer, loss):
     # Setting the model for training
     model.train ()
     
@@ -97,7 +124,7 @@ def train_model (model, train_data, optim, loss):
         labels_tensor = labels.to (device=torch.device (DEVICE))
         
         # Prepare model to be trained
-        optim.zero_grad ()
+        optimizer.zero_grad ()
         
         # Process the data and get an output
         outputs = model (images_tensor)
@@ -109,7 +136,7 @@ def train_model (model, train_data, optim, loss):
         loss_value.backward ()
         
         # Update the weights with the values calculated before
-        optim.step ()
+        optimizer.step ()
         
         train_loss += loss_value.item()
         _, labels_predicted = torch.max(outputs, 1)
@@ -121,9 +148,9 @@ def train_model (model, train_data, optim, loss):
     
     return train_loss, train_size, train_correct, end_time - initTime
     
-# -------------------------------
+# -------------------------------------
 
-def test_model(model, test_data):
+def test_model(model, test_data, loss):
     # Setting the model for testing
     model.eval ()
     
@@ -135,13 +162,31 @@ def test_model(model, test_data):
     # Getting the time of the beginning of the testing
     initTime = time.time()
     
-    for batch_idx, (images, labels) in enumerate (test_data):
-        break
+    # Not gonna modify the weights or bias
+    with torch.no_grad ():
         
-        test_loss += loss_value.item()
-        _, labels_predicted = torch.max(outputs, 1)
-        test_size += batch_size
-        test_correct += (labels_predicted == labels).sum().item()
+        # Processing the set of images
+        for batch_idx, (images, labels) in enumerate (test_data):
+            
+            # Converting data into tensors
+            images_tensor = images.to (device=torch.device (DEVICE))
+            labels_tensor = labels.to (device=torch.device (DEVICE))
+            
+            # Forwarding the data through the model
+            outputs = model (images_tensor)
+            
+            # Calculating the loss
+            loss_value = loss(outputs, labels_tensor)
+
+            # Accumulating the loss
+            test_loss += loss_value.item()
+
+            # Getting the predicted labels
+            _, labels_predicted = torch.max(outputs, 1)
+
+            # Counting the correct predictions
+            test_size += labels.size(0)
+            test_correct += (labels_predicted == labels_tensor).sum().item()
                 
     # Getting the time of the end of the testing
     end_time = time.time()
@@ -207,7 +252,7 @@ def main_code ():
     
     # Preparate the model
     neuralNet = ResNet18Classifier (len (labels))
-    loss_function = loss_fn = nn.CrossEntropyLoss()
+    loss_function = nn.CrossEntropyLoss()
     optimizer = optim.Adam(neuralNet.parameters(), lr=learning_rate)
     
     # Create dataset instances with transforms
@@ -231,7 +276,7 @@ def main_code ():
         train_loss, train_size, train_correct, train_time = train_model (neuralNet, train_loader, optimizer, loss_function)
         
         # Testing the model
-        test_loss, test_size, test_correct, test_time = test_model (neuralNet, test_loader)
+        test_loss, test_size, test_correct, test_time = test_model (neuralNet, test_loader, loss_function)
 
         save_results(results, epoch, 
                      train_loss, test_loss,
