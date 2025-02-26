@@ -15,9 +15,10 @@ import os
 import pandas as pd
 import time
 import numpy as np
+import datetime
 
 # Neural net modifiers
-epochs = 5
+epochs = 10
 batch_size = 32
 learning_rate = 0.001
 image_size = (224, 224)
@@ -86,7 +87,7 @@ class BrainTumorDataset (Dataset):
 
 class EarlyStop:
     patience = None
-    
+    best_model = None
     threshold_loss = None
     verbose = None
     best_loss = None
@@ -102,7 +103,6 @@ class EarlyStop:
         self.best_loss = np.inf
         self.counter = 0
         self.stop_training = False
-        
 
 # -----------------------------------------------
 
@@ -197,31 +197,25 @@ def test_model(model, test_data, loss):
 
 def save_results(results, epoch, train_loss, test_loss, train_data_size, test_data_size, train_correct_predictions, test_correct_predictions, train_time, test_time):
     # Getting the final values
-    train_loss_percentage = train_loss / train_data_size
-    test_loss_percentage = test_loss / test_data_size
+    train_loss_percentage = train_loss / train_data_size * 100
+    test_loss_percentage = test_loss / test_data_size * 100
     train_accuracy_percentage = train_correct_predictions / train_data_size * 100
     test_accuracy_percentage = test_correct_predictions / test_data_size * 100
     test_correct_predictions_percentage = test_correct_predictions / test_data_size * 100
-    test_incorrect_predictions_percentage = 1 - test_correct_predictions_percentage
+    test_incorrect_predictions_percentage = 100 - test_correct_predictions_percentage
     train_correct_predictions_percentage = train_correct_predictions / train_data_size * 100
-    train_incorrect_predictions_percentage = 1 - train_correct_predictions_percentage
+    train_incorrect_predictions_percentage = 100 - train_correct_predictions_percentage
         
-    """
-        results = pd.DataFrame(columns=["Epoch", 
-                                    "Train Loss", "Test Loss", 
-                                    "Train Accuracy", "Test Accuracy", 
-                                    "Correct Predictions (Train)", "Incorrect Predictions (Train)", 
-                                    "Correct Predictions (Test)", "Incorrect Predictions (Test)",
-                                    "Train Time", "Test time"])
-    """
-    
+    train_time_formatted = str (datetime.timedelta (seconds=train_time))
+    test_time_formatted = str (datetime.timedelta (seconds=test_time))
+        
     # Add new values to the results
     results.loc[len(results)] = [int (epoch + 1), 
                                  round (train_loss_percentage, DECIMALS), round (test_loss_percentage, DECIMALS), 
                                  round (train_accuracy_percentage, DECIMALS), round (test_accuracy_percentage, DECIMALS), 
                                  round (train_correct_predictions_percentage, DECIMALS), round (train_incorrect_predictions_percentage, DECIMALS),
                                  round (test_correct_predictions_percentage, DECIMALS), round (test_incorrect_predictions_percentage, DECIMALS),
-                                 round (train_time, DECIMALS), round (test_time, DECIMALS)]
+                                 train_time_formatted, test_time_formatted]
     
 def save_results_into_disk (results_dataframe):
     results_dataframe["Epoch"] = results_dataframe["Epoch"].astype(int)
