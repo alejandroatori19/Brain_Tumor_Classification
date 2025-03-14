@@ -11,3 +11,6 @@ data/
 
 # Ignore Python cache files
 __pycache__/
+
+# Ignore the entire test_data directory
+test_data/
