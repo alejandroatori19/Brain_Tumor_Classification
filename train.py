@@ -52,25 +52,46 @@ test_transform = transforms.Compose([
 # ----------------------------------
 # NEURAL NET CLASS
 # ----------------------------------
-
 class ResNet50Classifier(nn.Module):
-    def __init__(self, dropout_prob=0.5, num_classes=4):
-        super(ResNet50Classifier, self).__init__()
+    def __init__(self, dropout_prob=0.3, num_classes=4, hidden_dim=512):
+        super().__init__()
         
-        # Load pre-trained ResNet50
-        self.model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
+        # Load pre-trained ResNet50 with modern weights
+        self.model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
         
-        # Freeze all layers except the final block (layer4)
+        # Strategic Freezing (layers 1-3 frozen)
         for name, param in self.model.named_parameters():
-            if 'layer4' not in name:  # Freezing everything except layer4
-                param.requires_grad = False
-
-        # Modify the fully connected layer to include Dropout and adjust for the number of classes
+            param.requires_grad = 'layer4' in name or 'fc' in name
+            
+        # Enhanced Classifier Head
         num_features = self.model.fc.in_features
         self.model.fc = nn.Sequential(
-            nn.Dropout(p=dropout_prob),  # Dropout before FC layer
-            nn.Linear(num_features, num_classes)
+            nn.Linear(num_features, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ELU(inplace=True),  # Smoother than ReLU for medical images
+            nn.Dropout(p=dropout_prob),
+            nn.Linear(hidden_dim, num_classes)
         )
+        
+        # Advanced Initialization
+        self._initialize_weights()
+        
+    def _initialize_weights(self):
+        for m in self.model.fc.modules():
+            if isinstance(m, nn.Linear):
+                # Option 1: Use 'relu' for initialization (works fine with ELU in practice)
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.BatchNorm1d):
+                nn.init.ones_(m.weight)
+                nn.init.zeros_(m.bias)
+        
+        # Partial unfreezing of layer4 bottlenecks remains the same
+        for m in self.model.layer4[-1].modules():  # Last bottleneck
+            if isinstance(m, nn.Conv2d):
+                m.weight.requires_grad = True
+                if m.bias is not None:
+                    m.bias.requires_grad = True
 
     def forward(self, x):
         return self.model(x)
